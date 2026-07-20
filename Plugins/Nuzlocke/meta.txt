@@ -1,0 +1,3 @@
+Name         = Nuzlocke Catch Rule
+Version      = 1.0
+Credits      = PIF nuzlocke
