@@ -4,7 +4,7 @@ External plugin for Pokemon Infinite Fusion.
 
 ## Features
 
-- Checks `Data/Scripts/999_Main/999_Main.rb` when a save is loaded or saved.
+- Checks `Data/Scripts/999_Main/999_Main.rb` when a new game starts or a save is loaded or saved.
 - Detects writes that could enable debug mode, including whitespace variations, line continuations, truthy expressions, environment or method results, and `||=` or `|=` assignments. Clear `false` and `nil` assignments are ignored.
 - When detected, marks the current save as game over and immediately disables debug mode.
 - Blocks map transfers and door or stair events while the cheat flag is active.

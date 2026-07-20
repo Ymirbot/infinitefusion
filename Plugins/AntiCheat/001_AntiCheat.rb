@@ -1,13 +1,12 @@
 module AntiCheat
   SOURCE = "Data/Scripts/999_Main/999_Main.rb"
   DEBUG_WRITE = /\$DEBUG\s*(?:=|\|=|\|\|=)\s*(?!false\b|nil\b)/
+  DEBUG_FALSE_TRUE = /\$DEBUG\s*(?:=|\|=|\|\|=)\s*false\s*(?:\|\||or)\s*(?:true|1\b)/
 
   def self.detected?
     return false unless File.file?(SOURCE)
     source = File.read(SOURCE).gsub(/\\\s*\n/, "")
-    source.match?(DEBUG_WRITE) || source.match?(
-      /\$DEBUG\s*(?:=|\|=|\|\|=)\s*false\s*(?:\|\||or)\s*(?:true|1\b)/
-    )
+    source.match?(DEBUG_WRITE) || source.match?(DEBUG_FALSE_TRUE)
   end
 
   def self.game_over?
@@ -16,12 +15,9 @@ module AntiCheat
 
   def self.check
     return unless $PokemonGlobal
-    if detected?
-      $PokemonGlobal.anticheat_game_over = true
-      $DEBUG = false
-    else
-      $PokemonGlobal.anticheat_game_over = false
-    end
+    cheating = detected?
+    $PokemonGlobal.anticheat_game_over = cheating
+    $DEBUG = false if cheating
   end
 
   def self.block_transition
@@ -38,7 +34,9 @@ class << Game
 
   def start_new(*args)
     $PokemonGlobal.anticheat_game_over = false if $PokemonGlobal
-    anticheat_original_start_new(*args)
+    result = anticheat_original_start_new(*args)
+    AntiCheat.check
+    result
   end
 
   alias anticheat_original_load load
