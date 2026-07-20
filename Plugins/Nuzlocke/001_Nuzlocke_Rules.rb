@@ -3,11 +3,11 @@ module NuzlockeRules
     pokemon && pokemon.nuzlocke_dead
   end
 
-  def self.block_party_move(scene)
+  def self.block_party_move
     Kernel.pbMessage(_INTL("One or more of the selected Pokémon have fainted."))
   end
 
-  def self.block_fusion(scene)
+  def self.block_fusion
     Kernel.pbMessage(_INTL("Fainted Pokémon cannot be used for fusion."))
   end
 
@@ -132,8 +132,7 @@ module NuzlockeRules
   def self.can_catch?(battle)
     return true unless enabled? && battle.wildBattle?
     return true unless $PokemonTemp.nuzlocke_catch_area
-    return true if $PokemonTemp.nuzlocke_catch_allowed
-    false
+    $PokemonTemp.nuzlocke_catch_allowed
   end
 
   def self.block_message(scene)
@@ -239,7 +238,7 @@ class PokemonStorageScreen
   def pbWithdraw(selected, heldpoke)
     if NuzlockeRules.enabled? && (NuzlockeRules.dead?(heldpoke) ||
        (selected[0] >= 0 && NuzlockeRules.dead?(@storage[selected[0], selected[1]])))
-      NuzlockeRules.block_party_move(@scene)
+      NuzlockeRules.block_party_move
       return false
     end
     nuzlocke_original_pbWithdraw(selected, heldpoke)
@@ -247,7 +246,7 @@ class PokemonStorageScreen
 
   def pbPlace(selected)
     if NuzlockeRules.enabled? && selected[0] == -1 && NuzlockeRules.dead?(@heldpkmn)
-      NuzlockeRules.block_party_move(@scene)
+      NuzlockeRules.block_party_move
       return false
     end
     nuzlocke_original_pbPlace(selected)
@@ -255,7 +254,7 @@ class PokemonStorageScreen
 
   def pbSwap(selected)
     if NuzlockeRules.enabled? && selected[0] == -1 && NuzlockeRules.dead?(@heldpkmn)
-      NuzlockeRules.block_party_move(@scene)
+      NuzlockeRules.block_party_move
       return false
     end
     nuzlocke_original_pbSwap(selected)
@@ -267,7 +266,7 @@ class PokemonStorageScreen
 
   def pbPlaceMulti(box, selected_index)
     if NuzlockeRules.enabled? && box == -1 && @multiheldpkmn.any? { |held| NuzlockeRules.dead?(held[0]) }
-      NuzlockeRules.block_party_move(@scene)
+      NuzlockeRules.block_party_move
       return
     end
     nuzlocke_original_pbPlaceMulti(box, selected_index)
@@ -282,7 +281,7 @@ class PokemonStorageScreen
 
   def pbFuseFromPC(selected, heldpoke)
     if NuzlockeRules.enabled? && (NuzlockeRules.dead?(heldpoke) || NuzlockeRules.dead?(@storage[selected[0], selected[1]]))
-      NuzlockeRules.block_fusion(@scene)
+      NuzlockeRules.block_fusion
       return
     end
     nuzlocke_original_pbFuseFromPC(selected, heldpoke)
@@ -290,7 +289,7 @@ class PokemonStorageScreen
 
   def pbFusionCommands(selected)
     if NuzlockeRules.enabled? && (NuzlockeRules.dead?(@heldpkmn) || NuzlockeRules.dead?(@storage[selected[0], selected[1]]))
-      NuzlockeRules.block_fusion(@scene)
+      NuzlockeRules.block_fusion
       return
     end
     nuzlocke_original_pbFusionCommands(selected)
@@ -298,7 +297,7 @@ class PokemonStorageScreen
 
   def reverseFromPC(selected)
     if NuzlockeRules.enabled? && NuzlockeRules.dead?(@storage[selected[0], selected[1]])
-      NuzlockeRules.block_fusion(@scene)
+      NuzlockeRules.block_fusion
       return
     end
     nuzlocke_original_reverseFromPC(selected)
@@ -306,7 +305,7 @@ class PokemonStorageScreen
 
   def pbUnfuseFromPC(selected)
     if NuzlockeRules.enabled? && NuzlockeRules.dead?(@storage[selected[0], selected[1]])
-      NuzlockeRules.block_fusion(@scene)
+      NuzlockeRules.block_fusion
       return
     end
     nuzlocke_original_pbUnfuseFromPC(selected)
