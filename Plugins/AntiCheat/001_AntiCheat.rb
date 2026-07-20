@@ -1,7 +1,10 @@
 module AntiCheat
   SOURCE = "Data/Scripts/999_Main/999_Main.rb"
+
   def self.detected?
-    File.file?(SOURCE) && File.read(SOURCE).include?("$DEBUG = true")
+    return false unless File.file?(SOURCE)
+    source = File.read(SOURCE).gsub(/\\\s*\n/, "")
+    source.match?(/\$DEBUG\s*(?:=|\|=|\|\|=)\s*(?:true|1\b|!\s*false|!!\s*1|["']true["'])/)
   end
 
   def self.game_over?
