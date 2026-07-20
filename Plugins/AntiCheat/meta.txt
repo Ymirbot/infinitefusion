@@ -1,0 +1,3 @@
+Name         = AntiCheat
+Version      = 1.0
+Credits      = Ymirbot

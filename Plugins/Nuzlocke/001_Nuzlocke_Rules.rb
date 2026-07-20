@@ -1,4 +1,35 @@
 module NuzlockeRules
+  SECRET_SEQUENCE = [8, 8, 2, 2, 4, 6, 4, 6]
+
+  def self.check_secret_sequence
+    @secret_index ||= 0
+    @last_direction ||= 0
+    return unless $PokemonGlobal
+    return if $PokemonGlobal.nuzlocke_secret_claimed
+    unless enabled?
+      @secret_index = 0
+      @last_direction = 0
+      return
+    end
+    direction = Input.dir4
+    if direction == 0
+      @last_direction = 0
+      return
+    end
+    return if direction == @last_direction
+    @last_direction = direction
+    if direction != SECRET_SEQUENCE[@secret_index]
+      @secret_index = 0
+      return
+    end
+    @secret_index += 1
+    return unless @secret_index == SECRET_SEQUENCE.length
+    @secret_index = 0
+    pbWait(Graphics.frame_rate * 2)
+    pbMessage(_INTL("Really? Attempting the Konami code? Damn you're old..."))
+    $PokemonGlobal.nuzlocke_secret_claimed = true if pbReceiveItem(:HELIXFOSSIL)
+  end
+
   def self.dead?(pokemon)
     pokemon && pokemon.nuzlocke_dead
   end
@@ -196,6 +227,17 @@ module NuzlockeRules
   end
 end
 
+module Input
+  class << self
+    alias nuzlocke_original_update update
+
+    def update
+      nuzlocke_original_update
+      NuzlockeRules.check_secret_sequence
+    end
+  end
+end
+
 class PokemonSystem
   def nuzlocke_rules
     if $PokemonGlobal
@@ -222,6 +264,7 @@ class PokemonGlobalMetadata
   attr_accessor :nuzlocke_rules
   attr_accessor :nuzlocke_game_over
   attr_accessor :nuzlocke_first_battle_done
+  attr_accessor :nuzlocke_secret_claimed
 
   def nuzlocke_catch_areas
     @nuzlocke_catch_areas ||= {}
@@ -235,6 +278,7 @@ class << Game
     $PokemonSystem.nuzlocke_rules = false if $PokemonSystem
     $PokemonGlobal.nuzlocke_game_over = false if $PokemonGlobal
     $PokemonGlobal.nuzlocke_first_battle_done = false if $PokemonGlobal
+    $PokemonGlobal.nuzlocke_secret_claimed = false if $PokemonGlobal
     nuzlocke_original_start_new(*args)
   end
 end
@@ -296,9 +340,7 @@ class PokemonStorageScreen
     end
     nuzlocke_original_pbSwap(selected)
   end
-end
 
-class PokemonStorageScreen
   alias nuzlocke_original_pbPlaceMulti pbPlaceMulti
 
   def pbPlaceMulti(box, selected_index)
@@ -308,9 +350,7 @@ class PokemonStorageScreen
     end
     nuzlocke_original_pbPlaceMulti(box, selected_index)
   end
-end
 
-class PokemonStorageScreen
   alias nuzlocke_original_pbFuseFromPC pbFuseFromPC
   alias nuzlocke_original_pbFusionCommands pbFusionCommands
   alias nuzlocke_original_reverseFromPC reverseFromPC
@@ -444,30 +484,5 @@ class Object
     nuzlocke_original_pbAfterBattle(*args)
     NuzlockeRules.mark_game_over if NuzlockeRules.game_over_pending?
     NuzlockeRules.open_pending_replacement
-  end
-end
-
-class Scene_Map
-  alias nuzlocke_original_transfer_player transfer_player
-
-  def transfer_player(cancelVehicles = true)
-    if NuzlockeRules.game_over?
-      $game_temp.player_transferring = false
-      NuzlockeRules.show_game_over_message
-      return
-    end
-    nuzlocke_original_transfer_player(cancelVehicles)
-  end
-end
-
-class Game_Event
-  alias nuzlocke_original_start start
-
-  def start
-    if NuzlockeRules.game_over? && @list.any? { |command| command.code == 201 }
-      NuzlockeRules.show_game_over_message
-      return
-    end
-    nuzlocke_original_start
   end
 end
