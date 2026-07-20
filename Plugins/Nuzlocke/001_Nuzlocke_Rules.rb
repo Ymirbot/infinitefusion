@@ -16,8 +16,7 @@ module NuzlockeRules
     $Trainer.party.dup.each do |pokemon|
       next unless dead?(pokemon)
       next if $PokemonStorage.full?
-      box = $PokemonStorage.pbStoreCaught(pokemon)
-      next if box < 0
+      next if $PokemonStorage.pbStoreCaught(pokemon) < 0
       $Trainer.party.delete(pokemon)
       pbMessage(_INTL("{1} was moved to your PC and cannot return to the party.", pokemon.name))
     end
@@ -29,6 +28,24 @@ module NuzlockeRules
       found = true if pokemon && !pokemon.egg? && !pokemon.fainted? && !dead?(pokemon)
     end
     found
+  end
+
+  def self.game_over_pending?
+    @game_over_pending
+  end
+
+  def self.game_over?
+    enabled? && $PokemonGlobal.nuzlocke_game_over
+  end
+
+  def self.mark_game_over
+    $PokemonGlobal.nuzlocke_game_over = true
+    @game_over_pending = false
+    Game.save(safe: true)
+  end
+
+  def self.show_game_over_message
+    pbMessage(_INTL("You lost the Nuzlocke challenge. You were not the very best there ever was"))
   end
 
   def self.open_storage_for_replacement
@@ -45,11 +62,17 @@ module NuzlockeRules
   end
 
   def self.on_end_battle(_sender, event)
+    tutorial = @tutorial_battle
+    @tutorial_battle = false
+    return if tutorial
     return unless enabled?
     move_dead_pokemon
     return unless $Trainer.all_fainted?
-    return unless storage_has_able_pokemon?
-    @replacement_pending = true
+    if storage_has_able_pokemon?
+      @replacement_pending = true
+    else
+      @game_over_pending = true
+    end
   end
 
   def self.open_pending_replacement
@@ -67,6 +90,15 @@ module NuzlockeRules
 
   def self.enabled?
     $PokemonSystem && $PokemonSystem.nuzlocke_rules
+  end
+
+  def self.tutorial_battle?
+    @tutorial_battle
+  end
+
+  def self.start_battle
+    @tutorial_battle = enabled? && !$PokemonGlobal.nuzlocke_first_battle_done
+    $PokemonGlobal.nuzlocke_first_battle_done = true
   end
 
   def self.confirm_activation
@@ -143,12 +175,12 @@ module NuzlockeRules
     proc { |*args|
       battle = args[5]
       scene = args[6]
-      show_messages = args[7]
-      if !NuzlockeRules.can_catch?(battle)
-        NuzlockeRules.block_message(scene) if show_messages
-        next false
+      if can_catch?(battle)
+        original.call(*args)
+      else
+        block_message(scene) if args[7]
+        false
       end
-      original.call(*args)
     }
   end
 
@@ -188,6 +220,8 @@ end
 class PokemonGlobalMetadata
   attr_writer :nuzlocke_catch_areas
   attr_accessor :nuzlocke_rules
+  attr_accessor :nuzlocke_game_over
+  attr_accessor :nuzlocke_first_battle_done
 
   def nuzlocke_catch_areas
     @nuzlocke_catch_areas ||= {}
@@ -199,6 +233,8 @@ class << Game
 
   def start_new(*args)
     $PokemonSystem.nuzlocke_rules = false if $PokemonSystem
+    $PokemonGlobal.nuzlocke_game_over = false if $PokemonGlobal
+    $PokemonGlobal.nuzlocke_first_battle_done = false if $PokemonGlobal
     nuzlocke_original_start_new(*args)
   end
 end
@@ -225,7 +261,8 @@ class PokeBattle_Battler
   alias nuzlocke_original_pbFaint pbFaint
 
   def pbFaint(*args)
-    @pokemon.nuzlocke_dead = true if NuzlockeRules.enabled? && @pokemon && !opposes?
+    @pokemon.nuzlocke_dead = true if NuzlockeRules.enabled? &&
+      !NuzlockeRules.tutorial_battle? && @pokemon && !opposes?
     nuzlocke_original_pbFaint(*args)
   end
 end
@@ -387,14 +424,50 @@ class Object
   end
 end
 
-Events.onStartBattle += proc { NuzlockeRules.install_ball_handlers }
+Events.onStartBattle += proc {
+  NuzlockeRules.start_battle
+  NuzlockeRules.install_ball_handlers
+}
 NuzlockeRules.install_end_battle_handler
 
 class Object
+  alias nuzlocke_original_pbCheckAllFainted pbCheckAllFainted
+
+  def pbCheckAllFainted
+    nuzlocke_original_pbCheckAllFainted
+    NuzlockeRules.mark_game_over if NuzlockeRules.game_over_pending?
+  end
+
   alias nuzlocke_original_pbAfterBattle pbAfterBattle
 
   def pbAfterBattle(*args)
     nuzlocke_original_pbAfterBattle(*args)
+    NuzlockeRules.mark_game_over if NuzlockeRules.game_over_pending?
     NuzlockeRules.open_pending_replacement
+  end
+end
+
+class Scene_Map
+  alias nuzlocke_original_transfer_player transfer_player
+
+  def transfer_player(cancelVehicles = true)
+    if NuzlockeRules.game_over?
+      $game_temp.player_transferring = false
+      NuzlockeRules.show_game_over_message
+      return
+    end
+    nuzlocke_original_transfer_player(cancelVehicles)
+  end
+end
+
+class Game_Event
+  alias nuzlocke_original_start start
+
+  def start
+    if NuzlockeRules.game_over? && @list.any? { |command| command.code == 201 }
+      NuzlockeRules.show_game_over_message
+      return
+    end
+    nuzlocke_original_start
   end
 end
