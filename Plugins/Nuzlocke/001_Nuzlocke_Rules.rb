@@ -23,6 +23,48 @@ module NuzlockeRules
     end
   end
 
+  def self.storage_has_able_pokemon?
+    found = false
+    pbEachPokemon do |pokemon, _box|
+      found = true if pokemon && !pokemon.egg? && !pokemon.fainted? && !dead?(pokemon)
+    end
+    found
+  end
+
+  def self.open_storage_for_replacement
+    pbMessage(_INTL("All of your party Pokémon fainted. Choose a replacement from the PC."))
+    loop do
+      pbFadeOutIn do
+        scene = PokemonStorageScene.new
+        screen = PokemonStorageScreen.new(scene, $PokemonStorage)
+        screen.pbStartScreen(1)
+      end
+      break if $Trainer.able_pokemon_count > 0
+      pbMessage(_INTL("You must choose a Pokémon from the PC before continuing."))
+    end
+  end
+
+  def self.on_end_battle(_sender, event)
+    return unless enabled?
+    move_dead_pokemon
+    return unless $Trainer.all_fainted?
+    return unless storage_has_able_pokemon?
+    @replacement_pending = true
+  end
+
+  def self.open_pending_replacement
+    return unless @replacement_pending
+    @replacement_pending = false
+    open_storage_for_replacement if storage_has_able_pokemon?
+  end
+
+  def self.install_end_battle_handler
+    return if @end_battle_handler_installed
+    callback = proc { |sender, event| on_end_battle(sender, event) }
+    Events.onEndBattle.instance_variable_get(:@callbacks).unshift(callback)
+    @end_battle_handler_installed = true
+  end
+
   def self.enabled?
     $PokemonSystem && $PokemonSystem.nuzlocke_rules
   end
@@ -108,6 +150,15 @@ end
 
 class Pokemon
   attr_accessor :nuzlocke_dead
+end
+
+class PokemonBoxIcon
+  alias nuzlocke_original_update update
+
+  def update
+    nuzlocke_original_update
+    self.color = Color.new(255, 0, 0, 96) if NuzlockeRules.dead?(@pokemon)
+  end
 end
 
 class PokeBattle_Battler
@@ -210,7 +261,7 @@ class ChallengeOptionsScene
       _INTL("Nuzlocke rules"), [_INTL("Off"), _INTL("On")],
       proc { $PokemonSystem.nuzlocke_rules ? 1 : 0 },
       proc { |value| $PokemonSystem.nuzlocke_rules = value == 1 },
-      _INTL("1 catchable encounter per area; fainted Pokémon are retired."))
+      _INTL("Only capture first encounter per area; fainted Pokémon are retired."))
     options
   end
 end
@@ -235,4 +286,13 @@ class Object
 end
 
 Events.onStartBattle += proc { NuzlockeRules.install_ball_handlers }
-Events.onEndBattle += proc { NuzlockeRules.move_dead_pokemon }
+NuzlockeRules.install_end_battle_handler
+
+class Object
+  alias nuzlocke_original_pbAfterBattle pbAfterBattle
+
+  def pbAfterBattle(*args)
+    nuzlocke_original_pbAfterBattle(*args)
+    NuzlockeRules.open_pending_replacement
+  end
+end
