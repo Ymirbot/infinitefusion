@@ -73,11 +73,11 @@ module NuzlockeRules
     commands = [_INTL("Yes"), _INTL("No")]
     first = pbMessage(
       _INTL("\\c[2]Nuzlocke rules cannot be turned off once enabled. Enable them?\\c[0]"),
-      commands, 1, nil, 1)
+      commands, 2, nil, 1)
     return false unless first == 0
     second = pbMessage(
       _INTL("\\c[2]Are you sure? Nuzlocke rules cannot be turned off.\\c[0]"),
-      commands, 1, nil, 1)
+      commands, 2, nil, 1)
     second == 0
   end
 
