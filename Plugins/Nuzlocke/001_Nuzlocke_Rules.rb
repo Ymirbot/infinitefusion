@@ -45,7 +45,7 @@ module NuzlockeRules
   end
 
   def self.show_game_over_message
-    pbMessage(_INTL("You lost the Nuzlocke challenge. You were not the very best there ever was"))
+    pbMessage(_INTL("You have no Pokémon left. You lost the Nuzlocke challenge."))
   end
 
   def self.open_storage_for_replacement
