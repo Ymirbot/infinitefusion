@@ -1,0 +1,238 @@
+module NuzlockeRules
+  def self.dead?(pokemon)
+    pokemon && pokemon.nuzlocke_dead
+  end
+
+  def self.block_party_move(scene)
+    scene.pbDisplay(_INTL("One or more of the selected Pokémon have fainted."))
+  end
+
+  def self.block_fusion(scene)
+    scene.pbDisplay(_INTL("Fainted Pokémon cannot be used for fusion."))
+  end
+
+  def self.move_dead_pokemon
+    return unless enabled?
+    $Trainer.party.dup.each do |pokemon|
+      next unless dead?(pokemon)
+      next if $PokemonStorage.full?
+      box = $PokemonStorage.pbStoreCaught(pokemon)
+      next if box < 0
+      $Trainer.party.delete(pokemon)
+      pbMessage(_INTL("{1} was moved to a PC box and cannot return to the party.", pokemon.name))
+    end
+  end
+
+  def self.enabled?
+    $PokemonSystem && $PokemonSystem.nuzlocke_rules
+  end
+
+  def self.area_key
+    return nil unless $game_map
+    $game_map.name.to_s.strip.downcase.gsub(/\s+/, " ")
+  end
+
+  def self.start_random_encounter
+    return unless enabled? && $PokemonTemp.encounterType
+    area = area_key
+    return if !area || area.empty?
+    used = $PokemonGlobal.nuzlocke_catch_areas
+    $PokemonTemp.nuzlocke_catch_area = area
+    $PokemonTemp.nuzlocke_catch_allowed = !used[area]
+    used[area] = true
+  end
+
+  def self.end_random_encounter
+    $PokemonTemp.nuzlocke_catch_area = nil
+    $PokemonTemp.nuzlocke_catch_allowed = nil
+  end
+
+  def self.can_catch?(battle)
+    return true unless enabled? && battle.wildBattle?
+    return true unless $PokemonTemp.nuzlocke_catch_area
+    return true if $PokemonTemp.nuzlocke_catch_allowed
+    false
+  end
+
+  def self.block_message(scene)
+    scene.pbDisplay(_INTL("You have already encountered a Pokémon in this area."))
+  end
+
+  def self.wrap_ball_handler(original)
+    proc { |*args|
+      battle = args[5]
+      scene = args[6]
+      show_messages = args[7]
+      if !NuzlockeRules.can_catch?(battle)
+        NuzlockeRules.block_message(scene) if show_messages
+        next false
+      end
+      original.call(*args)
+    }
+  end
+
+  def self.install_ball_handlers
+    return if @ball_handlers_installed
+    GameData::Item.each do |item|
+      next unless item.is_poke_ball?
+      original = ItemHandlers::CanUseInBattle[item.id]
+      next unless original
+      ItemHandlers::CanUseInBattle.add(item.id, wrap_ball_handler(original))
+    end
+    @ball_handlers_installed = true
+  end
+end
+
+class PokemonSystem
+  attr_writer :nuzlocke_rules
+
+  def nuzlocke_rules
+    @nuzlocke_rules = @nuzlocke_catch_rule if @nuzlocke_rules.nil? && !@nuzlocke_catch_rule.nil?
+    @nuzlocke_rules = false if @nuzlocke_rules.nil?
+    @nuzlocke_rules
+  end
+end
+
+class PokemonGlobalMetadata
+  attr_writer :nuzlocke_catch_areas
+
+  def nuzlocke_catch_areas
+    @nuzlocke_catch_areas ||= {}
+  end
+end
+
+class PokemonTemp
+  attr_accessor :nuzlocke_catch_area
+  attr_accessor :nuzlocke_catch_allowed
+end
+
+class Pokemon
+  attr_accessor :nuzlocke_dead
+end
+
+class PokeBattle_Battler
+  alias nuzlocke_original_pbFaint pbFaint
+
+  def pbFaint(*args)
+    @pokemon.nuzlocke_dead = true if NuzlockeRules.enabled? && @pokemon && !opposes?
+    nuzlocke_original_pbFaint(*args)
+  end
+end
+
+class PokemonStorageScreen
+  alias nuzlocke_original_pbWithdraw pbWithdraw
+  alias nuzlocke_original_pbPlace pbPlace
+  alias nuzlocke_original_pbSwap pbSwap
+
+  def pbWithdraw(selected, heldpoke)
+    if NuzlockeRules.enabled? && (NuzlockeRules.dead?(heldpoke) ||
+       (selected[0] >= 0 && NuzlockeRules.dead?(@storage[selected[0], selected[1]])))
+      NuzlockeRules.block_party_move(@scene)
+      return false
+    end
+    nuzlocke_original_pbWithdraw(selected, heldpoke)
+  end
+
+  def pbPlace(selected)
+    if NuzlockeRules.enabled? && selected[0] == -1 && NuzlockeRules.dead?(@heldpkmn)
+      NuzlockeRules.block_party_move(@scene)
+      return false
+    end
+    nuzlocke_original_pbPlace(selected)
+  end
+
+  def pbSwap(selected)
+    if NuzlockeRules.enabled? && selected[0] == -1 && NuzlockeRules.dead?(@heldpkmn)
+      NuzlockeRules.block_party_move(@scene)
+      return false
+    end
+    nuzlocke_original_pbSwap(selected)
+  end
+end
+
+class PokemonStorageScreen
+  alias nuzlocke_original_pbPlaceMulti pbPlaceMulti
+
+  def pbPlaceMulti(box, selected_index)
+    if NuzlockeRules.enabled? && box == -1 && @multiheldpkmn.any? { |held| NuzlockeRules.dead?(held[0]) }
+      NuzlockeRules.block_party_move(@scene)
+      return
+    end
+    nuzlocke_original_pbPlaceMulti(box, selected_index)
+  end
+end
+
+class PokemonStorageScreen
+  alias nuzlocke_original_pbFuseFromPC pbFuseFromPC
+  alias nuzlocke_original_pbFusionCommands pbFusionCommands
+  alias nuzlocke_original_reverseFromPC reverseFromPC
+  alias nuzlocke_original_pbUnfuseFromPC pbUnfuseFromPC
+
+  def pbFuseFromPC(selected, heldpoke)
+    if NuzlockeRules.enabled? && (NuzlockeRules.dead?(heldpoke) || NuzlockeRules.dead?(@storage[selected[0], selected[1]]))
+      NuzlockeRules.block_fusion(@scene)
+      return
+    end
+    nuzlocke_original_pbFuseFromPC(selected, heldpoke)
+  end
+
+  def pbFusionCommands(selected)
+    if NuzlockeRules.enabled? && (NuzlockeRules.dead?(@heldpkmn) || NuzlockeRules.dead?(@storage[selected[0], selected[1]]))
+      NuzlockeRules.block_fusion(@scene)
+      return
+    end
+    nuzlocke_original_pbFusionCommands(selected)
+  end
+
+  def reverseFromPC(selected)
+    if NuzlockeRules.enabled? && NuzlockeRules.dead?(@storage[selected[0], selected[1]])
+      NuzlockeRules.block_fusion(@scene)
+      return
+    end
+    nuzlocke_original_reverseFromPC(selected)
+  end
+
+  def pbUnfuseFromPC(selected)
+    if NuzlockeRules.enabled? && NuzlockeRules.dead?(@storage[selected[0], selected[1]])
+      NuzlockeRules.block_fusion(@scene)
+      return
+    end
+    nuzlocke_original_pbUnfuseFromPC(selected)
+  end
+end
+
+class ChallengeOptionsScene
+  alias nuzlocke_original_pbGetOptions pbGetOptions
+
+  def pbGetOptions(inloadscreen = false)
+    options = nuzlocke_original_pbGetOptions(inloadscreen)
+    options << EnumOption.new(
+      _INTL("Nuzlocke rules"), [_INTL("Off"), _INTL("On")],
+      proc { $PokemonSystem.nuzlocke_rules ? 1 : 0 },
+      proc { |value| $PokemonSystem.nuzlocke_rules = value == 1 },
+      _INTL("1 catchable encounter per area; fainted Pokémon are retired."))
+    options
+  end
+end
+
+class Object
+  alias nuzlocke_original_pbWildBattle pbWildBattle
+  alias nuzlocke_original_pbDoubleWildBattle pbDoubleWildBattle
+
+  def pbWildBattle(*args, &block)
+    NuzlockeRules.start_random_encounter
+    nuzlocke_original_pbWildBattle(*args, &block)
+  ensure
+    NuzlockeRules.end_random_encounter
+  end
+
+  def pbDoubleWildBattle(*args, &block)
+    NuzlockeRules.start_random_encounter
+    nuzlocke_original_pbDoubleWildBattle(*args, &block)
+  ensure
+    NuzlockeRules.end_random_encounter
+  end
+end
+
+Events.onStartBattle += proc { NuzlockeRules.install_ball_handlers }
+Events.onEndBattle += proc { NuzlockeRules.move_dead_pokemon }
