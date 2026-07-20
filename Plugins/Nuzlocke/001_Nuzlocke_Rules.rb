@@ -4,11 +4,11 @@ module NuzlockeRules
   end
 
   def self.block_party_move(scene)
-    scene.pbDisplay(_INTL("One or more of the selected Pokémon have fainted."))
+    Kernel.pbMessage(_INTL("One or more of the selected Pokémon have fainted."))
   end
 
   def self.block_fusion(scene)
-    scene.pbDisplay(_INTL("Fainted Pokémon cannot be used for fusion."))
+    Kernel.pbMessage(_INTL("Fainted Pokémon cannot be used for fusion."))
   end
 
   def self.move_dead_pokemon
@@ -19,7 +19,7 @@ module NuzlockeRules
       box = $PokemonStorage.pbStoreCaught(pokemon)
       next if box < 0
       $Trainer.party.delete(pokemon)
-      pbMessage(_INTL("{1} was moved to a PC box and cannot return to the party.", pokemon.name))
+      pbMessage(_INTL("{1} was moved to your PC and cannot return to the party.", pokemon.name))
     end
   end
 
@@ -32,7 +32,7 @@ module NuzlockeRules
   end
 
   def self.open_storage_for_replacement
-    pbMessage(_INTL("All of your party Pokémon fainted. Choose a replacement from the PC."))
+    pbMessage(_INTL("All of your party Pokémon fainted. Withdraw replacements from the PC."))
     loop do
       pbFadeOutIn do
         scene = PokemonStorageScene.new
@@ -40,7 +40,7 @@ module NuzlockeRules
         screen.pbStartScreen(1)
       end
       break if $Trainer.able_pokemon_count > 0
-      pbMessage(_INTL("You must choose a Pokémon from the PC before continuing."))
+      pbMessage(_INTL("You must withdraw at least 1 Pokémon from the PC before continuing."))
     end
   end
 
@@ -67,6 +67,46 @@ module NuzlockeRules
 
   def self.enabled?
     $PokemonSystem && $PokemonSystem.nuzlocke_rules
+  end
+
+  def self.confirm_activation
+    commands = [_INTL("Yes"), _INTL("No")]
+    first = pbMessage(
+      _INTL("\\c[2]Nuzlocke rules cannot be turned off once enabled. Enable them?\\c[0]"),
+      commands, 1, nil, 1)
+    return false unless first == 0
+    second = pbMessage(
+      _INTL("\\c[2]Are you sure? Nuzlocke rules cannot be turned off.\\c[0]"),
+      commands, 1, nil, 1)
+    second == 0
+  end
+
+  def self.activation_cancelled?
+    @activation_cancelled == true
+  end
+
+  def self.clear_activation_cancelled
+    @activation_cancelled = false
+  end
+
+  def self.reset_disable_attempt
+    @disable_attempted = false
+  end
+
+  def self.record_disable_attempt
+    @disable_attempted = true
+  end
+
+  def self.cancel_activation
+    $PokemonSystem.nuzlocke_rules = false
+    @activation_cancelled = true
+  end
+
+  def self.show_disable_warning
+    return unless @disable_attempted
+    @disable_attempted = false
+    $PokemonSystem.nuzlocke_rules = true
+    pbMessage(_INTL("Nuzlocke rules cannot be turned off once enabled. Re-enabling..."))
   end
 
   def self.area_key
@@ -126,20 +166,41 @@ module NuzlockeRules
 end
 
 class PokemonSystem
-  attr_writer :nuzlocke_rules
-
   def nuzlocke_rules
+    if $PokemonGlobal
+      if $PokemonGlobal.nuzlocke_rules.nil?
+        legacy = @nuzlocke_rules
+        legacy = @nuzlocke_catch_rule if legacy.nil?
+        $PokemonGlobal.nuzlocke_rules = !!legacy
+      end
+      return $PokemonGlobal.nuzlocke_rules
+    end
     @nuzlocke_rules = @nuzlocke_catch_rule if @nuzlocke_rules.nil? && !@nuzlocke_catch_rule.nil?
     @nuzlocke_rules = false if @nuzlocke_rules.nil?
     @nuzlocke_rules
+  end
+
+  def nuzlocke_rules=(value)
+    @nuzlocke_rules = value
+    $PokemonGlobal.nuzlocke_rules = value if $PokemonGlobal
   end
 end
 
 class PokemonGlobalMetadata
   attr_writer :nuzlocke_catch_areas
+  attr_accessor :nuzlocke_rules
 
   def nuzlocke_catch_areas
     @nuzlocke_catch_areas ||= {}
+  end
+end
+
+class << Game
+  alias nuzlocke_original_start_new start_new
+
+  def start_new(*args)
+    $PokemonSystem.nuzlocke_rules = false if $PokemonSystem
+    nuzlocke_original_start_new(*args)
   end
 end
 
@@ -252,17 +313,59 @@ class PokemonStorageScreen
   end
 end
 
+class NuzlockeOption < EnumOption
+end
+
+class Window_PokemonOption
+  alias nuzlocke_original_update update
+
+  def update
+    nuzlocke_original_update
+    if NuzlockeRules.activation_cancelled?
+      index = self.index
+      if @options[index].is_a?(NuzlockeOption)
+        setValueNoRefresh(index, 0)
+        NuzlockeRules.clear_activation_cancelled
+        refresh
+      end
+    end
+  end
+end
+
 class ChallengeOptionsScene
   alias nuzlocke_original_pbGetOptions pbGetOptions
 
   def pbGetOptions(inloadscreen = false)
+    NuzlockeRules.clear_activation_cancelled
     options = nuzlocke_original_pbGetOptions(inloadscreen)
-    options << EnumOption.new(
+    options << NuzlockeOption.new(
       _INTL("Nuzlocke rules"), [_INTL("Off"), _INTL("On")],
       proc { $PokemonSystem.nuzlocke_rules ? 1 : 0 },
-      proc { |value| $PokemonSystem.nuzlocke_rules = value == 1 },
-      _INTL("Only capture first encounter per area; fainted Pokémon are retired."))
+      proc { |value|
+        if value == 1
+          NuzlockeRules.reset_disable_attempt
+          if !$PokemonSystem.nuzlocke_rules
+            if NuzlockeRules.confirm_activation
+              $PokemonSystem.nuzlocke_rules = true
+            else
+              NuzlockeRules.cancel_activation
+            end
+          end
+        elsif $PokemonSystem.nuzlocke_rules
+          NuzlockeRules.record_disable_attempt
+        else
+          NuzlockeRules.clear_activation_cancelled
+        end
+      },
+      _INTL("Only capture first encounter per area; fainted Pokémon are retired permanently."))
     options
+  end
+
+  alias nuzlocke_original_pbEndScene pbEndScene
+
+  def pbEndScene
+    nuzlocke_original_pbEndScene
+    NuzlockeRules.show_disable_warning
   end
 end
 
