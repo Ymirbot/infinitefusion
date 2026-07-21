@@ -1,12 +1,33 @@
 module AntiCheat
   SOURCE = "Data/Scripts/999_Main/999_Main.rb"
+  CONFIGURATION = "configuration.json"
+  CONFIGURATION_CHEAT = /["']\s*cheats\s*["']\s*:\s*(?:true\b|1\b|["']\s*true\s*["'])/i
   DEBUG_WRITE = /\$DEBUG\s*(?:=|\|=|\|\|=)\s*(?!false\b|nil\b)/
   DEBUG_FALSE_TRUE = /\$DEBUG\s*(?:=|\|=|\|\|=)\s*false\s*(?:\|\||or)\s*(?:true|1\b)/
 
-  def self.detected?
+  def self.configuration_cheating?
+    return false unless File.file?(CONFIGURATION)
+    File.read(CONFIGURATION).match?(CONFIGURATION_CHEAT)
+  rescue SystemCallError
+    true
+  end
+
+  def self.source_cheating?
     return false unless File.file?(SOURCE)
     source = File.read(SOURCE).gsub(/\\\s*\n/, "")
     source.match?(DEBUG_WRITE) || source.match?(DEBUG_FALSE_TRUE)
+  end
+
+  def self.detection_reason
+    return "configuration.json cheats entry" if configuration_cheating?
+    return "999_Main.rb $DEBUG assignment" if source_cheating?
+    nil
+  rescue SystemCallError
+    "anti-cheat source unreadable"
+  end
+
+  def self.detected?
+    !detection_reason.nil?
   end
 
   def self.game_over?
@@ -21,6 +42,7 @@ module AntiCheat
   end
 
   def self.block_transition
+    printf("[AntiCheat] Detected: #{detection_reason || "saved anti-cheat flag"}\r\n")
     pbMessage(_INTL("Professor Oak would be dissapointed, I should revert my changes."))
   end
 end
