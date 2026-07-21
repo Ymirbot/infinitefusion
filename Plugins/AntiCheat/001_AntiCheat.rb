@@ -4,6 +4,20 @@ module AntiCheat
   CONFIGURATION_CHEAT = /["']\s*cheats\s*["']\s*:\s*(?:true\b|1\b|["']\s*true\s*["'])/i
   DEBUG_WRITE = /\$DEBUG\s*(?:=|\|=|\|\|=)\s*(?!false\b|nil\b)/
   DEBUG_FALSE_TRUE = /\$DEBUG\s*(?:=|\|=|\|\|=)\s*false\s*(?:\|\||or)\s*(?:true|1\b)/
+  TRANSITION_MESSAGES = [
+    ["<i>You hear some people talking on the other side of the door.</i>", "Did you hear something? No? Me neither."],
+    ["<i>You hear some people talking on the other side of the door.</i>", "Quick! Hide the Master Balls before they see!"],
+    ["<i>You hear some people talking on the other side of the door.</i>", "Sorry! We're closed!"],
+    ["<i>You hear some people talking on the other side of the door.</i>", "Did they really think we wouldn't notice?"],
+    ["A pile of Rare Candies is blocking the way."],
+    ["Professor Oak would be disappointed if I played like this."],
+    ["Ash would never."],
+    ["Gotta catch 'em all.", "Including you."],
+    ["<i>BONK!!!</i>", "The doorway turned out to be a painting. Ouch!"],
+    ["You cannot figure out how to move through the doorway and leave disappointed."],
+    :master_balls,
+    :rare_candies
+  ]
 
   def self.configuration_cheating?
     return false unless File.file?(CONFIGURATION)
@@ -39,7 +53,13 @@ module AntiCheat
 
   def self.block_transition
     printf("[AntiCheat] Detected: #{detection_reason || "saved anti-cheat flag"}\r\n")
-    pbMessage(_INTL("Professor Oak would be dissapointed, I should revert my changes."))
+    message = TRANSITION_MESSAGES.sample
+    if message == :master_balls || message == :rare_candies
+      item = GameData::Item.get(message == :master_balls ? :MASTERBALL : :RARECANDY)
+      pbMessage(_INTL("\\me[Item get]You obtained {1} \\c[1]{2}\\c[0]!\\wtnp[30]", 999, item.name_plural))
+      return pbMessage(_INTL("Just kidding."))
+    end
+    message.each { |text| pbMessage(_INTL(text)) }
   end
 end
 
