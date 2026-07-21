@@ -26,19 +26,15 @@ module AntiCheat
     "anti-cheat source unreadable"
   end
 
-  def self.detected?
-    !detection_reason.nil?
-  end
-
   def self.game_over?
     $PokemonGlobal && $PokemonGlobal.anticheat_game_over
   end
 
   def self.check
     return unless $PokemonGlobal
-    cheating = detected?
-    $PokemonGlobal.anticheat_game_over = cheating
-    $DEBUG = false if cheating
+    reason = detection_reason
+    $PokemonGlobal.anticheat_game_over = !reason.nil?
+    $DEBUG = false if reason
   end
 
   def self.block_transition
