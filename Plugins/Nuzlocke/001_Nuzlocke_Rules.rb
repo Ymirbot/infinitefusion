@@ -171,7 +171,20 @@ module NuzlockeRules
 
   def self.skip_repeat_encounter?
     active? && $PokemonSystem.nuzlocke_skip_encounters &&
-      $PokemonGlobal.nuzlocke_catch_areas[area_key]
+      encounter_count(area_key) >= encounters_per_area
+  end
+
+  def self.encounter_count(area)
+    value = $PokemonGlobal.nuzlocke_catch_areas[area]
+    return 1 if value == true
+    value.is_a?(Numeric) ? value.to_i : 0
+  end
+
+  def self.encounters_per_area
+    value = $PokemonSystem.nuzlocke_encounters_per_area
+    value = value.to_i if value.is_a?(Numeric)
+    value = 1 unless value.is_a?(Numeric)
+    value.between?(1, 4) ? value : 1
   end
 
   def self.start_random_encounter
@@ -179,9 +192,10 @@ module NuzlockeRules
     area = area_key
     return if !area || area.empty?
     used = $PokemonGlobal.nuzlocke_catch_areas
+    count = encounter_count(area)
     $PokemonTemp.nuzlocke_catch_area = area
-    $PokemonTemp.nuzlocke_catch_allowed = !used[area]
-    used[area] = true
+    $PokemonTemp.nuzlocke_catch_allowed = count < encounters_per_area
+    used[area] = count + 1
   end
 
   def self.end_random_encounter
@@ -237,6 +251,7 @@ end
 
 class PokemonSystem
   attr_accessor :nuzlocke_skip_encounters
+  attr_accessor :nuzlocke_encounters_per_area
 
   def nuzlocke_rules
     if $PokemonGlobal
@@ -275,6 +290,7 @@ class << Game
   def start_new(*args)
     $PokemonSystem.nuzlocke_rules = false if $PokemonSystem
     $PokemonSystem.nuzlocke_skip_encounters = false if $PokemonSystem
+    $PokemonSystem.nuzlocke_encounters_per_area = 1 if $PokemonSystem
     $PokemonGlobal.nuzlocke_game_over = false if $PokemonGlobal
     $PokemonGlobal.nuzlocke_secret_claimed = false if $PokemonGlobal
     nuzlocke_original_start_new(*args)
@@ -478,7 +494,12 @@ class NuzlockeOptionsScene < PokemonOption_Scene
        proc { |value|
          $PokemonSystem.nuzlocke_skip_encounters = value == 1 if NuzlockeRules.enabled?
        },
-       _INTL("Prevent encounters in areas whose Nuzlocke encounter is already used."))]
+       _INTL("Prevent encounters in areas whose Nuzlocke encounter is already used.")),
+     EnumOption.new(
+       _INTL("Encounters per area"), %w[1 2 3 4],
+       proc { NuzlockeRules.encounters_per_area - 1 },
+       proc { |value| $PokemonSystem.nuzlocke_encounters_per_area = value + 1 },
+       _INTL("Number of Pokémon encounters allowed in each area."))]
   end
 
   def pbEndScene

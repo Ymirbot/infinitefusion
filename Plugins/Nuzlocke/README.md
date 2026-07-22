@@ -13,7 +13,8 @@ External plugin for Pokemon Infinite Fusion.
 
 ### Catch rule
 
-- Only the first wild Pokemon encountered in an area can be caught.
+- Only the configured number of first wild Pokemon encountered in an area can be caught.
+- `Encounters per area` can raise the allowance to 2, 3, or 4; the default is 1.
 - Areas are identified by their normalized map name. Multiple floors with the same name count as one area, and split routes with the same name count as one area.
 - Trailing floor markers such as `B1F` and `B2F` are ignored, so cave floors count as one area.
 - The encounter is consumed when the wild battle starts. Fleeing, fainting, or failing to catch the Pokemon loses that area's encounter.
