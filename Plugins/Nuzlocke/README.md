@@ -10,6 +10,7 @@ External plugin for Pokemon Infinite Fusion.
 - Enabling requires two confirmations. Both prompts default to **No** and are red.
 - Once enabled, the option cannot be disabled. Choosing **No** or pressing Back during either confirmation leaves it Off. Trying to disable it re-enables the option and shows a warning.
 - The setting is stored per save file. New games start with the setting Off.
+- The Transfer Box is disabled while Nuzlocke rules are active, but remains usable as a normal PC box.
 
 ### Catch rule
 
@@ -23,7 +24,7 @@ External plugin for Pokemon Infinite Fusion.
 
 ### Retired Pokemon
 
-- A player Pokemon that faints is marked retired permanently.
+- A player Pokemon that faints in battle or from overworld poison is marked retired permanently.
 - Retired Pokemon are moved to PC storage after battle when possible.
 - Retired Pokemon show a red overlay in the party and PC box icons.
 - Retired Pokemon cannot be withdrawn, moved into the party, or moved there through multi-select actions. Mixed multi-select moves are blocked if any selected Pokemon is retired.

@@ -53,6 +53,22 @@ module NuzlockeRules
     end
   end
 
+  def self.note_overworld_faint
+    @overworld_faint_pending = true
+  end
+
+  def self.process_overworld_faint
+    return unless active? && @overworld_faint_pending
+    @overworld_faint_pending = false
+    move_dead_pokemon
+    return unless $Trainer.all_fainted?
+    if storage_has_able_pokemon?
+      @replacement_pending = true
+    else
+      @game_over_pending = true
+    end
+  end
+
   def self.storage_has_able_pokemon?
     found = false
     pbEachPokemon do |pokemon, _box|
@@ -313,6 +329,38 @@ end
 
 class Pokemon
   attr_accessor :nuzlocke_dead
+
+  alias nuzlocke_original_hp= hp=
+
+  def hp=(value)
+    alive = @hp && @hp > 0
+    self.nuzlocke_original_hp = value
+    if alive && @hp == 0 && NuzlockeRules.active? && (!$game_temp || !$game_temp.in_battle)
+      NuzlockeRules.note_overworld_faint
+      @nuzlocke_dead = true
+    end
+  end
+end
+
+class StorageTransferBox
+  alias nuzlocke_original_can_use_transfer_box? can_use_transfer_box?
+  alias nuzlocke_original_setDisabled setDisabled
+
+  def can_use_transfer_box?
+    return false if NuzlockeRules.active?
+    nuzlocke_original_can_use_transfer_box?
+  end
+
+  def setDisabled
+    unless @disabled
+      @name = TRANSFER_BOX_NAME_DISABLED
+      message = if NuzlockeRules.active?
+                  _INTL("\\C[2]The Transfer Box is disabled while Nuzlocke rules are active. You can still use it as a normal PC box, but Pokémon placed here will not be available in other savefiles.")
+                end
+      message ? pbMessage(message) : nuzlocke_original_setDisabled
+    end
+    @disabled = true
+  end
 end
 
 class PokemonBoxIcon
@@ -489,14 +537,14 @@ class NuzlockeOptionsScene < PokemonOption_Scene
       },
       _INTL("Only capture first encounter per area; fainted Pokémon are retired permanently.")),
      EnumOption.new(
-       _INTL("Skip repeat encounters"), [_INTL("Off"), _INTL("On")],
+       _INTL("Repel effect"), [_INTL("Off"), _INTL("On")],
        proc { $PokemonSystem.nuzlocke_rules && $PokemonSystem.nuzlocke_skip_encounters ? 1 : 0 },
        proc { |value|
          $PokemonSystem.nuzlocke_skip_encounters = value == 1 if NuzlockeRules.enabled?
        },
-       _INTL("Prevent encounters in areas whose Nuzlocke encounter is already used.")),
+       _INTL("Repel effect in areas where max encounters are reached.")),
      EnumOption.new(
-       _INTL("Encounters per area"), %w[1 2 3 4],
+       _INTL("Max encounters"), %w[1 2 3 4],
        proc { NuzlockeRules.encounters_per_area - 1 },
        proc { |value| $PokemonSystem.nuzlocke_encounters_per_area = value + 1 },
        _INTL("Number of Pokémon encounters allowed in each area."))]
@@ -544,8 +592,10 @@ class Object
   alias nuzlocke_original_pbCheckAllFainted pbCheckAllFainted
 
   def pbCheckAllFainted
+    NuzlockeRules.process_overworld_faint
     nuzlocke_original_pbCheckAllFainted
     NuzlockeRules.mark_game_over if NuzlockeRules.game_over_pending?
+    NuzlockeRules.open_pending_replacement
   end
 
   alias nuzlocke_original_pbAfterBattle pbAfterBattle
@@ -556,3 +606,9 @@ class Object
     NuzlockeRules.open_pending_replacement
   end
 end
+
+Events.onStepTakenTransferPossible += proc {
+  NuzlockeRules.process_overworld_faint
+  NuzlockeRules.mark_game_over if NuzlockeRules.game_over_pending?
+  NuzlockeRules.open_pending_replacement
+}
