@@ -169,6 +169,11 @@ module NuzlockeRules
     $game_map.name.to_s.strip.downcase.gsub(/\s+/, " ").sub(/\s+(?:b|f)?\d+f\z/, "")
   end
 
+  def self.skip_repeat_encounter?
+    active? && $PokemonSystem.nuzlocke_skip_encounters &&
+      $PokemonGlobal.nuzlocke_catch_areas[area_key]
+  end
+
   def self.start_random_encounter
     return unless active?
     area = area_key
@@ -231,6 +236,8 @@ module Input
 end
 
 class PokemonSystem
+  attr_accessor :nuzlocke_skip_encounters
+
   def nuzlocke_rules
     if $PokemonGlobal
       if $PokemonGlobal.nuzlocke_rules.nil?
@@ -267,6 +274,7 @@ class << Game
 
   def start_new(*args)
     $PokemonSystem.nuzlocke_rules = false if $PokemonSystem
+    $PokemonSystem.nuzlocke_skip_encounters = false if $PokemonSystem
     $PokemonGlobal.nuzlocke_game_over = false if $PokemonGlobal
     $PokemonGlobal.nuzlocke_secret_claimed = false if $PokemonGlobal
     nuzlocke_original_start_new(*args)
@@ -276,6 +284,15 @@ end
 class PokemonTemp
   attr_accessor :nuzlocke_catch_area
   attr_accessor :nuzlocke_catch_allowed
+end
+
+class PokemonEncounters
+  alias nuzlocke_original_encounter_triggered? encounter_triggered?
+
+  def encounter_triggered?(enc_type, repel_active = false, triggered_by_step = true)
+    return false if NuzlockeRules.skip_repeat_encounter?
+    nuzlocke_original_encounter_triggered?(enc_type, repel_active, triggered_by_step)
+  end
 end
 
 class Pokemon
@@ -397,13 +414,45 @@ class Window_PokemonOption
   end
 end
 
-class ChallengeOptionsScene
+class PokemonGameOption_Scene
   alias nuzlocke_original_pbGetOptions pbGetOptions
 
   def pbGetOptions(inloadscreen = false)
-    NuzlockeRules.clear_activation_cancelled
     options = nuzlocke_original_pbGetOptions(inloadscreen)
-    options << NuzlockeOption.new(
+    return options unless $game_switches
+    options << ButtonOption.new(
+      _INTL("Nuzlocke Options"),
+      proc {
+        @nuzlocke_menu = true
+        openNuzlockeMenu
+      },
+      "<icon=#{ICON_CHALLENGE}> " + _INTL("Configure Nuzlocke rules."))
+    options
+  end
+
+  def openNuzlockeMenu
+    return unless @nuzlocke_menu
+    pbFadeOutIn {
+      scene = NuzlockeOptionsScene.new
+      screen = PokemonOptionScreen.new(scene)
+      screen.pbStartScreen
+    }
+    @nuzlocke_menu = false
+  end
+end
+
+class NuzlockeOptionsScene < PokemonOption_Scene
+  def pbStartScene(inloadscreen = false)
+    super
+    @sprites["title"] = Window_UnformattedTextPokemon.newWithSize(
+      _INTL("Nuzlocke Options"), 0, 0, Graphics.width, 64, @viewport)
+    @sprites["textbox"].text = _INTL("Nuzlocke rules")
+    pbFadeInAndShow(@sprites) { pbUpdate }
+  end
+
+  def pbGetOptions(inloadscreen = false)
+    NuzlockeRules.clear_activation_cancelled
+    [NuzlockeOption.new(
       _INTL("Nuzlocke rules"), [_INTL("Off"), _INTL("On")],
       proc { $PokemonSystem.nuzlocke_rules ? 1 : 0 },
       proc { |value|
@@ -422,14 +471,18 @@ class ChallengeOptionsScene
           NuzlockeRules.clear_activation_cancelled
         end
       },
-      _INTL("Only capture first encounter per area; fainted Pokémon are retired permanently."))
-    options
+      _INTL("Only capture first encounter per area; fainted Pokémon are retired permanently.")),
+     EnumOption.new(
+       _INTL("Skip repeat encounters"), [_INTL("Off"), _INTL("On")],
+       proc { $PokemonSystem.nuzlocke_rules && $PokemonSystem.nuzlocke_skip_encounters ? 1 : 0 },
+       proc { |value|
+         $PokemonSystem.nuzlocke_skip_encounters = value == 1 if NuzlockeRules.enabled?
+       },
+       _INTL("Prevent encounters in areas whose Nuzlocke encounter is already used."))]
   end
 
-  alias nuzlocke_original_pbEndScene pbEndScene
-
   def pbEndScene
-    nuzlocke_original_pbEndScene
+    super
     NuzlockeRules.show_disable_warning
   end
 end

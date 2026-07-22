@@ -4,7 +4,8 @@ External plugin for Pokemon Infinite Fusion.
 
 ## Features
 
-- Adds a **Nuzlocke rules** option under Challenge options.
+- Adds a dedicated **Nuzlocke Options** menu to the main Options screen.
+- Includes an optional **Skip repeat encounters** setting that acts like a Repel in areas whose encounter is already used.
 - Rules remain inactive until the player obtains the Pokédex.
 - Enabling requires two confirmations. Both prompts default to **No** and are red.
 - Once enabled, the option cannot be disabled. Choosing **No** or pressing Back during either confirmation leaves it Off. Trying to disable it re-enables the option and shows a warning.
