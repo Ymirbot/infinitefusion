@@ -6,7 +6,7 @@ module NuzlockeRules
     @last_direction ||= 0
     return unless $PokemonGlobal
     return if $PokemonGlobal.nuzlocke_secret_claimed
-    unless enabled?
+    unless active?
       @secret_index = 0
       @last_direction = 0
       return
@@ -43,7 +43,7 @@ module NuzlockeRules
   end
 
   def self.move_dead_pokemon
-    return unless enabled?
+    return unless active?
     $Trainer.party.dup.each do |pokemon|
       next unless dead?(pokemon)
       next if $PokemonStorage.full?
@@ -66,7 +66,7 @@ module NuzlockeRules
   end
 
   def self.game_over?
-    enabled? && $PokemonGlobal.nuzlocke_game_over
+    active? && $PokemonGlobal.nuzlocke_game_over
   end
 
   def self.mark_game_over
@@ -93,10 +93,7 @@ module NuzlockeRules
   end
 
   def self.on_end_battle(_sender, event)
-    tutorial = @tutorial_battle
-    @tutorial_battle = false
-    return if tutorial
-    return unless enabled?
+    return unless active?
     move_dead_pokemon
     return unless $Trainer.all_fainted?
     if storage_has_able_pokemon?
@@ -123,13 +120,8 @@ module NuzlockeRules
     $PokemonSystem && $PokemonSystem.nuzlocke_rules
   end
 
-  def self.tutorial_battle?
-    @tutorial_battle
-  end
-
-  def self.start_battle
-    @tutorial_battle = enabled? && !$PokemonGlobal.nuzlocke_first_battle_done
-    $PokemonGlobal.nuzlocke_first_battle_done = true
+  def self.active?
+    enabled? && $Trainer && $Trainer.has_pokedex
   end
 
   def self.confirm_activation
@@ -174,11 +166,11 @@ module NuzlockeRules
 
   def self.area_key
     return nil unless $game_map
-    $game_map.name.to_s.strip.downcase.gsub(/\s+/, " ")
+    $game_map.name.to_s.strip.downcase.gsub(/\s+/, " ").sub(/\s+(?:b|f)?\d+f\z/, "")
   end
 
   def self.start_random_encounter
-    return unless enabled? && $PokemonTemp.encounterType
+    return unless active?
     area = area_key
     return if !area || area.empty?
     used = $PokemonGlobal.nuzlocke_catch_areas
@@ -193,7 +185,7 @@ module NuzlockeRules
   end
 
   def self.can_catch?(battle)
-    return true unless enabled? && battle.wildBattle?
+    return true unless active? && battle.wildBattle?
     return true unless $PokemonTemp.nuzlocke_catch_area
     $PokemonTemp.nuzlocke_catch_allowed
   end
@@ -263,7 +255,6 @@ class PokemonGlobalMetadata
   attr_writer :nuzlocke_catch_areas
   attr_accessor :nuzlocke_rules
   attr_accessor :nuzlocke_game_over
-  attr_accessor :nuzlocke_first_battle_done
   attr_accessor :nuzlocke_secret_claimed
 
   def nuzlocke_catch_areas
@@ -277,7 +268,6 @@ class << Game
   def start_new(*args)
     $PokemonSystem.nuzlocke_rules = false if $PokemonSystem
     $PokemonGlobal.nuzlocke_game_over = false if $PokemonGlobal
-    $PokemonGlobal.nuzlocke_first_battle_done = false if $PokemonGlobal
     $PokemonGlobal.nuzlocke_secret_claimed = false if $PokemonGlobal
     nuzlocke_original_start_new(*args)
   end
@@ -305,8 +295,7 @@ class PokeBattle_Battler
   alias nuzlocke_original_pbFaint pbFaint
 
   def pbFaint(*args)
-    @pokemon.nuzlocke_dead = true if NuzlockeRules.enabled? &&
-      !NuzlockeRules.tutorial_battle? && @pokemon && !opposes?
+    @pokemon.nuzlocke_dead = true if NuzlockeRules.active? && @pokemon && !opposes?
     nuzlocke_original_pbFaint(*args)
   end
 end
@@ -317,7 +306,7 @@ class PokemonStorageScreen
   alias nuzlocke_original_pbSwap pbSwap
 
   def pbWithdraw(selected, heldpoke)
-    if NuzlockeRules.enabled? && (NuzlockeRules.dead?(heldpoke) ||
+    if NuzlockeRules.active? && (NuzlockeRules.dead?(heldpoke) ||
        (selected[0] >= 0 && NuzlockeRules.dead?(@storage[selected[0], selected[1]])))
       NuzlockeRules.block_party_move
       return false
@@ -326,7 +315,7 @@ class PokemonStorageScreen
   end
 
   def pbPlace(selected)
-    if NuzlockeRules.enabled? && selected[0] == -1 && NuzlockeRules.dead?(@heldpkmn)
+    if NuzlockeRules.active? && selected[0] == -1 && NuzlockeRules.dead?(@heldpkmn)
       NuzlockeRules.block_party_move
       return false
     end
@@ -334,7 +323,7 @@ class PokemonStorageScreen
   end
 
   def pbSwap(selected)
-    if NuzlockeRules.enabled? && selected[0] == -1 && NuzlockeRules.dead?(@heldpkmn)
+    if NuzlockeRules.active? && selected[0] == -1 && NuzlockeRules.dead?(@heldpkmn)
       NuzlockeRules.block_party_move
       return false
     end
@@ -344,7 +333,7 @@ class PokemonStorageScreen
   alias nuzlocke_original_pbPlaceMulti pbPlaceMulti
 
   def pbPlaceMulti(box, selected_index)
-    if NuzlockeRules.enabled? && box == -1 && @multiheldpkmn.any? { |held| NuzlockeRules.dead?(held[0]) }
+    if NuzlockeRules.active? && box == -1 && @multiheldpkmn.any? { |held| NuzlockeRules.dead?(held[0]) }
       NuzlockeRules.block_party_move
       return
     end
@@ -357,7 +346,7 @@ class PokemonStorageScreen
   alias nuzlocke_original_pbUnfuseFromPC pbUnfuseFromPC
 
   def pbFuseFromPC(selected, heldpoke)
-    if NuzlockeRules.enabled? && (NuzlockeRules.dead?(heldpoke) || NuzlockeRules.dead?(@storage[selected[0], selected[1]]))
+    if NuzlockeRules.active? && (NuzlockeRules.dead?(heldpoke) || NuzlockeRules.dead?(@storage[selected[0], selected[1]]))
       NuzlockeRules.block_fusion
       return
     end
@@ -365,7 +354,7 @@ class PokemonStorageScreen
   end
 
   def pbFusionCommands(selected)
-    if NuzlockeRules.enabled? && (NuzlockeRules.dead?(@heldpkmn) || NuzlockeRules.dead?(@storage[selected[0], selected[1]]))
+    if NuzlockeRules.active? && (NuzlockeRules.dead?(@heldpkmn) || NuzlockeRules.dead?(@storage[selected[0], selected[1]]))
       NuzlockeRules.block_fusion
       return
     end
@@ -373,7 +362,7 @@ class PokemonStorageScreen
   end
 
   def reverseFromPC(selected)
-    if NuzlockeRules.enabled? && NuzlockeRules.dead?(@storage[selected[0], selected[1]])
+    if NuzlockeRules.active? && NuzlockeRules.dead?(@storage[selected[0], selected[1]])
       NuzlockeRules.block_fusion
       return
     end
@@ -381,7 +370,7 @@ class PokemonStorageScreen
   end
 
   def pbUnfuseFromPC(selected)
-    if NuzlockeRules.enabled? && NuzlockeRules.dead?(@storage[selected[0], selected[1]])
+    if NuzlockeRules.active? && NuzlockeRules.dead?(@storage[selected[0], selected[1]])
       NuzlockeRules.block_fusion
       return
     end
@@ -448,6 +437,7 @@ end
 class Object
   alias nuzlocke_original_pbWildBattle pbWildBattle
   alias nuzlocke_original_pbDoubleWildBattle pbDoubleWildBattle
+  alias nuzlocke_original_pbWildBattleSpecific pbWildBattleSpecific
 
   def pbWildBattle(*args, &block)
     NuzlockeRules.start_random_encounter
@@ -462,10 +452,16 @@ class Object
   ensure
     NuzlockeRules.end_random_encounter
   end
+
+  def pbWildBattleSpecific(*args, &block)
+    NuzlockeRules.start_random_encounter
+    nuzlocke_original_pbWildBattleSpecific(*args, &block)
+  ensure
+    NuzlockeRules.end_random_encounter
+  end
 end
 
 Events.onStartBattle += proc {
-  NuzlockeRules.start_battle
   NuzlockeRules.install_ball_handlers
 }
 NuzlockeRules.install_end_battle_handler

@@ -5,6 +5,7 @@ External plugin for Pokemon Infinite Fusion.
 ## Features
 
 - Adds a **Nuzlocke rules** option under Challenge options.
+- Rules remain inactive until the player obtains the Pokédex.
 - Enabling requires two confirmations. Both prompts default to **No** and are red.
 - Once enabled, the option cannot be disabled. Choosing **No** or pressing Back during either confirmation leaves it Off. Trying to disable it re-enables the option and shows a warning.
 - The setting is stored per save file. New games start with the setting Off.
@@ -13,8 +14,9 @@ External plugin for Pokemon Infinite Fusion.
 
 - Only the first wild Pokemon encountered in an area can be caught.
 - Areas are identified by their normalized map name. Multiple floors with the same name count as one area, and split routes with the same name count as one area.
+- Trailing floor markers such as `B1F` and `B2F` are ignored, so cave floors count as one area.
 - The encounter is consumed when the wild battle starts. Fleeing, fainting, or failing to catch the Pokemon loses that area's encounter.
-- Static Pokemon and Safari Zone encounters are handled separately from this random-wild encounter rule.
+- Static Pokemon, including overworld interaction encounters, use the same area allowance as random encounters.
 - Later Pokeball attempts in a used area are blocked with a battle message.
 
 ### Retired Pokemon
@@ -32,10 +34,6 @@ External plugin for Pokemon Infinite Fusion.
 - The game saves immediately after game over. With multi-save support, a save slot must already be assigned for the save to succeed.
 - After game over, map transfers and door events are blocked with a message.
 - If all party Pokemon faint while usable Pokemon remain in storage, the normal blackout is followed by the PC replacement screen.
-
-### Tutorial battle
-
-The first battle of a new game is excluded from faint retirement and game-over checks. Its outcome does not affect the Nuzlocke state.
 
 ## Files
 
