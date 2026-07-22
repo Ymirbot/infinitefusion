@@ -363,6 +363,15 @@ class StorageTransferBox
   end
 end
 
+class HallOfFame_Scene
+  alias nuzlocke_original_getCurrentGameMode getCurrentGameMode
+
+  def getCurrentGameMode
+    return _INTL("Nuzlocke mode") if NuzlockeRules.enabled?
+    nuzlocke_original_getCurrentGameMode
+  end
+end
+
 class PokemonBoxIcon
   alias nuzlocke_original_update update
 

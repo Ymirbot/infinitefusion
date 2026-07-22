@@ -11,6 +11,7 @@ External plugin for Pokemon Infinite Fusion.
 - Once enabled, the option cannot be disabled. Choosing **No** or pressing Back during either confirmation leaves it Off. Trying to disable it re-enables the option and shows a warning.
 - The setting is stored per save file. New games start with the setting Off.
 - The Transfer Box is disabled while Nuzlocke rules are active, but remains usable as a normal PC box.
+- Hall of Fame entries display `Nuzlocke mode` when completed with Nuzlocke enabled.
 
 ### Catch rule
 
