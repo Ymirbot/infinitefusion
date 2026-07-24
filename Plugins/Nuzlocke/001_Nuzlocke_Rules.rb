@@ -621,3 +621,17 @@ Events.onStepTakenTransferPossible += proc {
   NuzlockeRules.mark_game_over if NuzlockeRules.game_over_pending?
   NuzlockeRules.open_pending_replacement
 }
+
+class DoublePreviewScreen
+  alias nuzlocke_original_draw_window draw_window
+
+  def draw_window(dexNumber, level, x, y, isShiny=false, bodyShiny=false, headShiny=false, window_position=0)
+    previewwindow = nuzlocke_original_draw_window(dexNumber, level, x, y, isShiny, bodyShiny, headShiny, window_position)
+    pif_sprite = window_position == 0 ? @sprite_left : @sprite_right
+    bitmap = BattleSpriteLoader.new.load_pif_sprite_directly(pif_sprite)
+    bitmap.shiftAllColors(dexNumber, bodyShiny, headShiny)
+    bitmap.scale_bitmap(Settings::FRONTSPRITE_SCALE)
+    previewwindow.setBitmap(bitmap)
+    previewwindow
+  end
+end

@@ -175,7 +175,6 @@ class DoublePreviewScreen
       @sprite_right = pif_sprite
     end
     hasCustom = customSpriteExists(body_pokemon,head_pokemon)
-
     @viewport_evo = Viewport.new(0, 0, Graphics.width, Graphics.height)
     @viewport_evo.z = 100001
     drawEvolutionIcons(dexNumber, @viewport_evo, x+16, y + 12, window_position)
