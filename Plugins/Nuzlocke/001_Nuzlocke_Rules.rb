@@ -51,6 +51,8 @@ module NuzlockeRules
       $Trainer.party.delete(pokemon)
       pbMessage(_INTL("{1} was moved to your PC and cannot return to the party.", pokemon.name))
     end
+    original_party = $PokemonGlobal.pokemonSelectionOriginalParty
+    original_party.delete_if { |pokemon| dead?(pokemon) } if original_party
   end
 
   def self.note_overworld_faint
