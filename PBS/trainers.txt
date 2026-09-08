@@ -1470,7 +1470,8 @@ Pokemon = B23H25,16
 #--------------------------------
 
 [BUGCATCHER,Elijah]
-Pokemon = B12H35,20 
+Pokemon = B12H35,20
+Moves=FUTURESIGHT,GROWL
 #---------------------------------
 
 [PICNICKER,Isabelle]
